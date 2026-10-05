@@ -1455,6 +1455,10 @@ deps_master_i2c.o := \
     $(wildcard include/config/OF_NUMA) \
     $(wildcard include/config/OF_OVERLAY) \
   /usr/src/linux-headers-6.18.39+rpt-common-rpi/include/uapi/linux/i2c.h \
+  /usr/src/linux-headers-6.18.39+rpt-common-rpi/include/linux/delay.h \
+  /usr/src/linux-headers-6.18.39+rpt-rpi-2712/arch/arm64/include/generated/asm/delay.h \
+  /usr/src/linux-headers-6.18.39+rpt-common-rpi/include/asm-generic/delay.h \
+  /usr/src/linux-headers-6.18.39+rpt-common-rpi/include/linux/cdev.h \
 
 master_i2c.o: $(deps_master_i2c.o)
 

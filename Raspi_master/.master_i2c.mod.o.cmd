@@ -3,6 +3,7 @@ savedcmd_master_i2c.mod.o :=  aarch64-linux-gnu-gcc-14 -Wp,-MMD,./.master_i2c.mo
 source_master_i2c.mod.o := master_i2c.mod.c
 
 deps_master_i2c.mod.o := \
+    $(wildcard include/config/MODULE_UNLOAD) \
   /usr/src/linux-headers-6.18.39+rpt-common-rpi/include/linux/compiler-version.h \
     $(wildcard include/config/CC_VERSION_TEXT) \
   /usr/src/linux-headers-6.18.39+rpt-common-rpi/include/linux/kconfig.h \
@@ -59,7 +60,6 @@ deps_master_i2c.mod.o := \
     $(wildcard include/config/HAVE_STATIC_CALL_INLINE) \
     $(wildcard include/config/KUNIT) \
     $(wildcard include/config/PRINTK_INDEX) \
-    $(wildcard include/config/MODULE_UNLOAD) \
     $(wildcard include/config/CONSTRUCTORS) \
     $(wildcard include/config/FUNCTION_ERROR_INJECTION) \
     $(wildcard include/config/DYNAMIC_DEBUG_CORE) \
