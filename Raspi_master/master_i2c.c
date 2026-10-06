@@ -19,7 +19,9 @@ MODULE_DESCRIPTION("I2C master driver for Raspberry Pi with arduino uno as slave
 MODULE_AUTHOR("Mark-Kitur");   
 static const char *module_name = "raspi_master";
 
-#define BUFFER_SIZE 16
+#define BUFFER_SIZE 13
+
+// Structure to hold driver data
 struct module_data {
     dev_t dev_num;
     struct cdev cdev;
@@ -32,9 +34,9 @@ struct module_data {
     struct delayed_work poll_work;
 };
 
-
-//FOPS
-static int master_open(struct inode *inode, struct file *file)
+//FOPS this will expose data to user space through /dev/raspi_master
+static int master_open(struct inode *inode, 
+                       struct file *file)
 {
     struct module_data *data = container_of(inode->i_cdev, struct module_data, cdev);
     file->private_data = data;
@@ -42,33 +44,49 @@ static int master_open(struct inode *inode, struct file *file)
     return 0;
 }
 
-static int master_release(struct inode *inode, struct file *file)
+static int master_release(struct inode *inode,
+                          struct file *file)
 {
     pr_info("%s: Device closed\n", module_name);
     return 0;
 }
 
-static ssize_t master_read(struct file *file,char __user *user_buf, size_t count,  loff_t *offset)
+static ssize_t master_read(struct file *file,
+                           char __user *user_buf,
+                           size_t count,
+                           loff_t *offset)
 {
     struct module_data *data = file->private_data;
-    size_t len, bytes_to_copy;
+    char output[64];
+    int len = 0;
+    int i;
 
-    len = strnlen(data->dev_buffer, BUFFER_SIZE);
-
-    if (*offset >= len)
+    if (*offset > 0)
         return 0;
 
-    bytes_to_copy = min(count, len - *offset);
+    for (i = 0; i < data->data_len; i++) {
+        len += scnprintf(output + len,
+                         sizeof(output) - len,
+                         "%u ",
+                         data->dev_buffer[i]);
+    }
 
-    if (copy_to_user(user_buf,data->dev_buffer + *offset,bytes_to_copy))
+    len += scnprintf(output + len,
+                     sizeof(output) - len,
+                     "\n");
+
+    if (count < len)
+        return -EINVAL;
+
+    if (copy_to_user(user_buf, output, len))
         return -EFAULT;
 
-    *offset += bytes_to_copy;
+    *offset += len;
 
-    return bytes_to_copy;
+    return len;
 }
-
-
+        
+// Define file operations for the character device
 static struct file_operations fops ={
     .owner = THIS_MODULE,
     .open = master_open,
@@ -77,32 +95,65 @@ static struct file_operations fops ={
 };
 
 // read data from the I2C slave device
-static int master_read_from_slave(struct i2c_client *client,uint8_t start_reg, uint8_t *buffer, int len){
+static int master_read_from_slave(struct i2c_client *client, 
+                                  u8 *buffer){
     int ret ;
     //smbus read block data
-    ret = i2c_smbus_read_i2c_block_data(client, start_reg, len, buffer);
+    ret = i2c_master_recv(client, buffer, BUFFER_SIZE);
     if(ret < 0){
         dev_err(&client->dev, "%s: Failed to read from slave device\n", module_name);
         return ret;
     }
-    return 0;
+    return ret;
 } 
 
 // periodic work function to read data from the I2C slave device and store it in the device buffer
-static void master_periodic_work(struct work_struct *work){
-    struct module_data *data = container_of(to_delayed_work(work), struct module_data, poll_work);
+static void master_periodic_work(struct work_struct *work)
+{
+    struct module_data *data =container_of(to_delayed_work(work),struct module_data,poll_work);
+
     int ret;
+    int i;
     u8 buffer[BUFFER_SIZE];
-    ret = master_read_from_slave(data->client, 0x00, buffer, BUFFER_SIZE);
-    if(ret < 0){
-        dev_err(&data->client->dev, "%s: Failed to read from slave device\n", module_name);
-        return;
+
+    ret = master_read_from_slave(data->client,
+                                 buffer);
+
+    if (ret < 0) {
+        dev_err(&data->client->dev,
+                "%s: Failed to read from slave device\n",
+                module_name);
+        goto reschedule;
     }
-    // store the data in the device buffer
-    memcpy(data->dev_buffer, buffer, BUFFER_SIZE);
-    // schedule the next read after 1 second
-    schedule_delayed_work((struct delayed_work *)work, msecs_to_jiffies(1000));
+
+    memcpy(data->dev_buffer, buffer, ret);
+    data->data_len = ret;
+
+    dev_info(&data->client->dev,
+             "%s: Received %d bytes:\n",
+             module_name,
+             ret);
+
+    for (i = 0; i < ret; i++) {
+        dev_info(&data->client->dev,
+                 "%s: Buffer[%d] = %u\n",
+                 module_name,
+                 i,
+                 buffer[i]);
+    }
+
+reschedule:
+    schedule_delayed_work(&data->poll_work,
+                          msecs_to_jiffies(1000));
 }
+
+static char *master_devnode(const struct device *dev, umode_t *mode)
+{
+    if (mode)
+        *mode = 0666;
+    return NULL;
+}   
+
 
 static int master_probe(struct i2c_client *client)
 {
@@ -114,7 +165,6 @@ static int master_probe(struct i2c_client *client)
              module_name, client->addr);
 
     /* Allocate driver data */
-
     data = devm_kzalloc(&client->dev,
                         sizeof(*data),
                         GFP_KERNEL);
@@ -123,12 +173,10 @@ static int master_probe(struct i2c_client *client)
         return -ENOMEM;
 
     i2c_set_clientdata(client, data);
-
     data->client = client;
 
 
     /* Allocate device number */
-
     ret = alloc_chrdev_region(&data->dev_num,
                               0,
                               1,
@@ -140,16 +188,12 @@ static int master_probe(struct i2c_client *client)
                 module_name);
         return ret;
     }
-
-
     /* Initialize character device */
-
     cdev_init(&data->cdev, &fops);
     data->cdev.owner = THIS_MODULE;
 
 
     /* Add character device */
-
     ret = cdev_add(&data->cdev,
                    data->dev_num,
                    1);
@@ -164,7 +208,6 @@ static int master_probe(struct i2c_client *client)
 
 
     /* Create class */
-
     data->class = class_create(module_name);
 
     if (IS_ERR(data->class)) {
@@ -177,9 +220,11 @@ static int master_probe(struct i2c_client *client)
         goto err_cdev;
     }
 
+    // Set the devnode function to set permissions for the device node
+    data->class->devnode = master_devnode;
+
 
     /* Create /dev/raspi_master */
-
     if (IS_ERR(device_create(data->class,
                              NULL,
                              data->dev_num,
@@ -197,7 +242,6 @@ static int master_probe(struct i2c_client *client)
 
 
     /* Allocate I2C data buffer */
-
     data->dev_buffer = devm_kzalloc(&client->dev,
                                     BUFFER_SIZE,
                                     GFP_KERNEL);
@@ -209,12 +253,11 @@ static int master_probe(struct i2c_client *client)
 
 
     /* Initialize polling work */
-
     INIT_DELAYED_WORK(&data->poll_work,
                       master_periodic_work);
 
     schedule_delayed_work(&data->poll_work,
-                          msecs_to_jiffies(1000));
+                          msecs_to_jiffies(500));
 
 
     dev_info(&client->dev,
