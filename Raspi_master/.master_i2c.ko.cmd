@@ -1,1 +1,0 @@
-savedcmd_master_i2c.ko := aarch64-linux-gnu-ld -r -EL  -maarch64elf -z noexecstack --no-warn-rwx-segments --build-id=sha1  -T /usr/src/linux-headers-6.18.39+rpt-rpi-2712/arch/arm64/module.lds -o master_i2c.ko master_i2c.o master_i2c.mod.o .module-common.o
