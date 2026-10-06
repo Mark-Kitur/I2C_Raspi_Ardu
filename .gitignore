@@ -8,3 +8,10 @@ modules.order
 Module.symvers
 compile_commands.json   
 .cache/
+
+// platform IO
+.pio/
+include/
+test/
+lib/
+
