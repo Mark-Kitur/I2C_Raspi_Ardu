@@ -6,7 +6,7 @@ KDIR := /lib/modules/$(shell uname -r)/build
 all: module device_tree
 
 module:
-	$(MAKE) -C $(KDIR) M=$(PWD) modules
+	$(MAKE) -C $(KERNEL_SRC) M=$(PWD) modules
 
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean  
