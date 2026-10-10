@@ -134,13 +134,13 @@ static void master_periodic_work(struct work_struct *work)
              module_name,
              ret);
 
-    for (i = 0; i < ret; i++) {
-        dev_info(&data->client->dev,
-                 "%s: Buffer[%d] = %u\n",
-                 module_name,
-                 i,
-                 buffer[i]);
-    }
+    // for (i = 0; i < ret; i++) {
+    //     dev_info(&data->client->dev,
+    //              "%s: Buffer[%d] = %u\n",
+    //              module_name,
+    //              i,
+    //              buffer[i]);
+    // }
 
 reschedule:
     schedule_delayed_work(&data->poll_work,
