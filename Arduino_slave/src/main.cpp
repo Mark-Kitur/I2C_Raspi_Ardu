@@ -8,6 +8,7 @@ uint8_t num = 13;
 int BuiltInLED = 13;
 const int numBytes = 13;
 
+const int pot= A0;
 // structure to holding the data to be sent
 struct Data {
     uint8_t speed;
@@ -38,7 +39,9 @@ void onRequest()
     uint8_t buffer[numBytes] = {0};
     struct Data carData;
 
-    carData.speed = random(0, 200); // 0 to 200
+    int speed = analogRead(pot);
+    speed = map(speed,0,1024,0,200);
+    carData.speed = speed; // 0 to 200
     carData.abs = (carData.speed > 150) ? 1 : 0; // 1 or 0
     carData.airbag = (carData.speed > 170) ? 1 : 0; // 1 or 0
     carData.battery = (carData.speed>20) ?1 : 0;                
@@ -82,6 +85,8 @@ void setup() {
     pinMode(BuiltInLED, OUTPUT);
     Serial.begin(9600);
     Wire.begin(I2C_ADDR);
+
+    pinMode(pot, INPUT);
 
     //Wire.onReceive(onReceive);
     Wire.onRequest(onRequest);
